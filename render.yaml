@@ -1,0 +1,54 @@
+services:
+  # WAHA engine. Render's free tier supports neither private services
+  # (type: pserv) nor attached disks, so this now runs as a public free
+  # web service instead — protected by an auto-generated API key since
+  # it's reachable from the internet. Also, because free web services
+  # can't receive traffic over Render's private network, minibot below
+  # talks to it over its public URL rather than an internal hostport.
+  - type: web
+    name: waha
+    runtime: image
+    plan: free
+    image:
+      url: docker.io/devlikeapro/waha:latest
+    envVars:
+      # Reconnects a previously-linked session automatically after a
+      # restart/redeploy, instead of requiring you to re-pair every time.
+      # NOTE: on free tier there's no disk, so the session data itself
+      # doesn't survive a restart or a spin-down — this only helps if
+      # the underlying container happens to keep running.
+      - key: WHATSAPP_RESTART_ALL_SESSIONS
+        value: "true"
+      - key: WAHA_API_KEY
+        generateValue: true
+
+  # The bot — public web service. Serves the pairing page at "/", and
+  # receives WAHA's webhook calls at /webhooks/waha.
+  - type: web
+    name: minibot
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: WAHA_URL
+        fromService:
+          name: waha
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: WAHA_API_KEY
+        fromService:
+          name: waha
+          type: web
+          envVarKey: WAHA_API_KEY
+      # A random secret Render generates once and stores — used to check
+      # that incoming /webhooks/waha calls really came from WAHA.
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: SESSION_NAME
+        value: default
+      - key: TARGET_GROUP_ID
+        value: 120363429763384848@g.us
+      # PUBLIC_BASE_URL is intentionally NOT set here — Render injects
+      # RENDER_EXTERNAL_URL into every web service automatically, and
+      # index.js already falls back to that when PUBLIC_BASE_URL is unset.
