@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pair your WhatsApp number</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 420px; margin: 60px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 1.3rem; }
+  input { width: 100%; padding: 10px; font-size: 1rem; box-sizing: border-box; margin-top: 6px; }
+  button { margin-top: 12px; padding: 10px 16px; font-size: 1rem; cursor: pointer; }
+  .code { font-size: 2rem; letter-spacing: 4px; text-align: center; margin: 20px 0; padding: 16px; background: #f2f2f2; border-radius: 8px; }
+  .status { margin-top: 16px; padding: 10px; border-radius: 6px; }
+  .status.working { background: #dcfce7; color: #166534; }
+  .status.pending { background: #fef9c3; color: #854d0e; }
+  .status.error { background: #fee2e2; color: #991b1b; }
+  small { color: #666; }
+</style>
+</head>
+<body>
+  <h1>Pair your WhatsApp number</h1>
+  <p>Enter your number with country code, digits only (e.g. <code>15551234567</code>).</p>
+  <input id="phone" type="text" inputmode="numeric" placeholder="15551234567" />
+  <button id="pair-btn">Get pairing code</button>
+
+  <div id="code-box" style="display:none;">
+    <div class="code" id="code"></div>
+    <p>On your phone: <b>WhatsApp → Linked Devices → Link a Device → Link with phone number instead</b>, then enter this code.</p>
+  </div>
+
+  <div id="status" class="status pending">Checking session status…</div>
+
+<script>
+const phoneInput = document.getElementById('phone');
+const pairBtn = document.getElementById('pair-btn');
+const codeBox = document.getElementById('code-box');
+const codeEl = document.getElementById('code');
+const statusEl = document.getElementById('status');
+
+async function refreshStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    if (data.status === 'WORKING') {
+      statusEl.className = 'status working';
+      statusEl.textContent = '✅ Linked and running.';
+    } else if (data.status === 'SCAN_QR_CODE' || data.status === 'STARTING') {
+      statusEl.className = 'status pending';
+      statusEl.textContent = `Waiting for pairing… (${data.status})`;
+    } else {
+      statusEl.className = 'status pending';
+      statusEl.textContent = `Session status: ${data.status}`;
+    }
+  } catch {
+    statusEl.className = 'status error';
+    statusEl.textContent = 'Could not reach the bot service.';
+  }
+}
+
+pairBtn.addEventListener('click', async () => {
+  const phoneNumber = phoneInput.value.trim();
+  if (!phoneNumber) return;
+  pairBtn.disabled = true;
+  pairBtn.textContent = 'Requesting…';
+  try {
+    const res = await fetch('/api/pair', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phoneNumber })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'request failed');
+    codeEl.textContent = data.code;
+    codeBox.style.display = 'block';
+  } catch (err) {
+    statusEl.className = 'status error';
+    statusEl.textContent = `Error: ${err.message}`;
+  } finally {
+    pairBtn.disabled = false;
+    pairBtn.textContent = 'Get pairing code';
+  }
+});
+
+refreshStatus();
+setInterval(refreshStatus, 4000);
+</script>
+</body>
+</html>
