@@ -1,0 +1,45 @@
+services:
+  # WAHA engine — kept as a private service (no public URL): only the bot
+  # talks to it, over Render's internal network, so its API is never
+  # exposed to the internet.
+  - type: pserv
+    name: waha
+    runtime: image
+    plan: starter
+    image:
+      url: docker.io/devlikeapro/waha:latest
+    disk:
+      name: waha-sessions
+      mountPath: /app/.sessions
+      sizeGB: 1
+    envVars:
+      # Reconnects a previously-linked session automatically after a
+      # restart/redeploy, instead of requiring you to re-pair every time.
+      - key: WHATSAPP_RESTART_ALL_SESSIONS
+        value: "true"
+
+  # The bot — public web service. Serves the pairing page at "/", and
+  # receives WAHA's webhook calls at /webhooks/waha.
+  - type: web
+    name: minibot
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: WAHA_URL
+        fromService:
+          type: pserv
+          name: waha
+          property: hostport
+      # A random secret Render generates once and stores — used to check
+      # that incoming /webhooks/waha calls really came from WAHA.
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: SESSION_NAME
+        value: default
+      - key: TARGET_GROUP_ID
+        value: 120363429763384848@g.us
+      # PUBLIC_BASE_URL is intentionally NOT set here — Render injects
+      # RENDER_EXTERNAL_URL into every web service automatically, and
+      # index.js already falls back to that when PUBLIC_BASE_URL is unset.

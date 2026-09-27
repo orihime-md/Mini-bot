@@ -1,0 +1,24 @@
+version: '3.8'
+services:
+  waha:
+    image: devlikeapro/waha:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - waha-sessions:/app/.sessions
+
+  bot:
+    build: .
+    ports:
+      - "3001:3000"
+    environment:
+      WAHA_URL: http://waha:3000
+      PUBLIC_BASE_URL: http://bot:3000
+      WEBHOOK_SECRET: change-me
+      SESSION_NAME: default
+      TARGET_GROUP_ID: 120363429763384848@g.us
+    depends_on:
+      - waha
+
+volumes:
+  waha-sessions:
